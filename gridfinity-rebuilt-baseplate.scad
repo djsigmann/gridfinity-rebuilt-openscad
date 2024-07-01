@@ -54,18 +54,20 @@ enable_magnet = true;
 
 // hole styles
 style_hole = 2; // [0:none, 1:countersink, 2:counterbore]
+// whether or not to place screw holes on the edges instead of the grid if the baseplate is larger than the grid
+screw_edges = false;
 
 
 // ===== IMPLEMENTATION ===== //
 screw_together = (style_plate == 3 || style_plate == 4);
 
 color("tomato")
-gridfinityBaseplate(gridx, gridy, l_grid, distancex, distancey, style_plate, enable_magnet, style_hole, fitx, fity);
+gridfinityBaseplate(gridx, gridy, l_grid, distancex, distancey, style_plate, enable_magnet, style_hole, screw_edges, fitx, fity);
 
 
 // ===== CONSTRUCTION ===== //
 
-module gridfinityBaseplate(gridx, gridy, length, dix, diy, sp, sm, sh, fitx, fity) {
+module gridfinityBaseplate(gridx, gridy, length, dix, diy, sp, sm, sh, se, fitx, fity) {
 
     assert(gridx > 0 || dix > 0, "Must have positive x grid amount!");
     assert(gridy > 0 || diy > 0, "Must have positive y grid amount!");
@@ -113,7 +115,32 @@ module gridfinityBaseplate(gridx, gridy, length, dix, diy, sp, sm, sh, fitx, fit
                 }
             }
         }
-        if (sp == 3 || sp == 4) cutter_screw_together(gx, gy, off);
+
+        if (screw_together) {
+            offx =
+                se
+                    ? offsetx
+                    : 0;
+            offy =
+                se
+                    ? offsety
+                    : 0;
+
+            offx_bm =
+                se
+                    ? (offsetx == 0)
+                        ? (dx-(gx*length-bp_xy_clearance))/2
+                        : offsetx
+                    : 0;
+            offy_bm =
+                se
+                    ? (offsety == 0)
+                        ? (dy-(gy*length-bp_xy_clearance))/2
+                        : offsety
+                    : 0;
+
+            cutter_screw_together(offx, offy, offx_bm, offy_bm, gx, gy, off);
+        }
     }
 
 }
@@ -192,15 +219,19 @@ module profile_skeleton() {
     }
 }
 
-module cutter_screw_together(gx, gy, off) {
+// offN offsets the screws along the N axis by its value, and offN_bm offsets the screws along the N axis BEFORE mirroring by its value
+module cutter_screw_together(offx, offy, offx_bm, offy_bm, gx, gy, off) {
 
-    screw(gx, gy);
+    translate([offx,0,0])
+    screw(gx, gy, offx_bm);
+
+    translate([0,offy,0])
     rotate([0,0,90])
-    screw(gy, gx);
+    screw(gy, gx, offy_bm);
 
-    module screw(a, b) {
+    module screw(a, b, _off) {
         copy_mirror([1,0,0])
-        translate([a*l_grid/2, 0, -off/2])
+        translate([a*l_grid/2 + abs(_off), 0, -off/2])
         pattern_linear(1, b, 1, l_grid)
         pattern_linear(1, n_screws, 1, d_screw_head + screw_spacing)
         rotate([0,90,0])
