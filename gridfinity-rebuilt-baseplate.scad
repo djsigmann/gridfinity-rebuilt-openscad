@@ -56,18 +56,22 @@ enable_magnet = true;
 style_hole = 2; // [0:none, 1:countersink, 2:counterbore]
 // whether or not to place screw holes on the edges instead of the grid if the baseplate is larger than the grid
 screw_edges = false;
+// whether or not to generate screws along the whole perimete, not just the grid
+screw_edges_perimeter = false;
 
 
 // ===== IMPLEMENTATION ===== //
 screw_together = (style_plate == 3 || style_plate == 4);
+se = screw_edges_perimeter ? true : screw_edges;
+
 
 color("tomato")
-gridfinityBaseplate(gridx, gridy, l_grid, distancex, distancey, style_plate, enable_magnet, style_hole, screw_edges, fitx, fity);
+gridfinityBaseplate(gridx, gridy, l_grid, distancex, distancey, style_plate, enable_magnet, style_hole, se, screw_edges_perimeter, fitx, fity);
 
 
 // ===== CONSTRUCTION ===== //
 
-module gridfinityBaseplate(gridx, gridy, length, dix, diy, sp, sm, sh, se, fitx, fity) {
+module gridfinityBaseplate(gridx, gridy, length, dix, diy, sp, sm, sh, se, se_p, fitx, fity) {
 
     assert(gridx > 0 || dix > 0, "Must have positive x grid amount!");
     assert(gridy > 0 || diy > 0, "Must have positive y grid amount!");
@@ -117,29 +121,55 @@ module gridfinityBaseplate(gridx, gridy, length, dix, diy, sp, sm, sh, se, fitx,
         }
 
         if (screw_together) {
-            offx =
+            offx_x =
                 se
                     ? offsetx
                     : 0;
-            offy =
+            offy_y =
                 se
                     ? offsety
                     : 0;
 
             offx_bm =
                 se
-                    ? (offsetx == 0)
+                    ? (fitx == 0)
                         ? (dx-(gx*length-bp_xy_clearance))/2
                         : offsetx
                     : 0;
             offy_bm =
                 se
-                    ? (offsety == 0)
+                    ? (fity == 0)
                         ? (dy-(gy*length-bp_xy_clearance))/2
                         : offsety
                     : 0;
 
-            cutter_screw_together(offx, offy, offx_bm, offy_bm, gx, gy, off);
+            nx =
+                (se_p && dy != gy)
+                    ? (fity == 0)
+                        ? floor((dy/length - gy)/2) * 2 + gy
+                        : floor(dy/length)
+                    : gy;
+            ny =
+                (se_p && dx != gx)
+                    ? (fitx == 0)
+                        ? floor((dx/length - gx)/2) * 2 + gx
+                        : floor(dx/length)
+                    : gx;
+
+            offx_y =
+                (se_p && fity != 0)
+                    ? (fity > 0)
+                        ? l_grid/2*(nx-gy)
+                        : -l_grid/2*(nx-gy)
+                    : 0;
+            offy_x =
+                (se_p && fitx != 0)
+                    ? (fitx > 0)
+                        ? l_grid/2*(ny-gx)
+                        : -l_grid/2*(ny-gx)
+                    : 0;
+
+            cutter_screw_together(nx, ny, offx_x, offx_y, offy_x, offy_y, offx_bm, offy_bm, gx, gy, off);
         }
     }
 
@@ -219,15 +249,18 @@ module profile_skeleton() {
     }
 }
 
-// offN offsets the screws along the N axis by its value, and offN_bm offsets the screws along the N axis BEFORE mirroring by its value
-module cutter_screw_together(offx, offy, offx_bm, offy_bm, gx, gy, off) {
+// 'along' means that the cyllinders' cross=sections are along that axis
+//
+// nN is the amount of screws along the N axis
+// offN_M offsets the screws along the N axis by its value along the M axis, and offsetN_bm offsets the screws along the N axis BEFORE mirroring by its value along the x axis
+module cutter_screw_together(nx, ny, offx_x, offx_y, offy_x, offy_y, offx_bm, offy_bm, gx, gy, off) {
 
-    translate([offx,0,0])
-    screw(gx, gy, offx_bm);
+    translate([offx_x,offx_y,0])
+    screw(gx, nx, offx_bm);
 
-    translate([0,offy,0])
+    translate([offy_x,offy_y,0])
     rotate([0,0,90])
-    screw(gy, gx, offy_bm);
+    screw(gy, ny, offy_bm);
 
     module screw(a, b, _off) {
         copy_mirror([1,0,0])
